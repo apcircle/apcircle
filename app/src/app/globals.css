@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f9fafb;
+  --foreground: #111827;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* Glossary term highlight in process text */
+.glossary-highlight {
+  background: linear-gradient(
+    to bottom,
+    transparent 60%,
+    rgba(59, 130, 246, 0.2) 60%
+  );
+  cursor: pointer;
+  font-weight: 500;
+  color: #1e40af;
+  transition: all 0.2s;
+  border-bottom: 1px dashed #3b82f6;
+}
+
+.glossary-highlight:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-bottom-style: solid;
+}

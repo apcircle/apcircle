@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Glossary ───────────────────────────────────────────────
+
+model GlossaryTerm {
+  id          String   @id @default(cuid())
+  term        String   @unique
+  definition  String
+  scope       String?
+  category    String?
+  status      TermStatus @default(DRAFT)
+
+  // Data Governance
+  dataOwner       String?
+  dataOwnerEmail  String?
+  dataSteward     String?
+  dataStewardEmail String?
+  dataCustodian   String?
+
+  // Classification
+  sensitivity     Sensitivity @default(INTERNAL)
+  qualityRules    String?
+  relatedSystems  String?
+
+  // Relations
+  processes   ProcessGlossaryTerm[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("glossary_terms")
+}
+
+enum TermStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  DEPRECATED
+}
+
+enum Sensitivity {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+// ─── Business Processes ─────────────────────────────────────
+
+model BusinessProcess {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  objective   String?
+  owner       String?
+  department  String?
+  status      ProcessStatus @default(DRAFT)
+
+  // Process details
+  inputs      String?
+  outputs     String?
+  steps       String?
+  frequency   String?
+  systems     String?
+  kpis        String?
+
+  // Relations
+  glossaryTerms ProcessGlossaryTerm[]
+  parentId      String?
+  parent        BusinessProcess?  @relation("SubProcesses", fields: [parentId], references: [id])
+  children      BusinessProcess[] @relation("SubProcesses")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("business_processes")
+}
+
+enum ProcessStatus {
+  DRAFT
+  ACTIVE
+  UNDER_REVIEW
+  ARCHIVED
+}
+
+// ─── Junction: Process ↔ Glossary Term ──────────────────────
+
+model ProcessGlossaryTerm {
+  id          String          @id @default(cuid())
+  processId   String
+  termId      String
+  process     BusinessProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
+  term        GlossaryTerm    @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([processId, termId])
+  @@map("process_glossary_terms")
+}
