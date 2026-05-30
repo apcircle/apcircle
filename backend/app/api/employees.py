@@ -1,9 +1,10 @@
 """Maestro de empleados y sincronización con Factorial."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..database import get_db
 from ..enums import Role
 from ..models import Company, Employee, User
@@ -51,10 +52,16 @@ def sync_factorial(
     _: User = Depends(require_roles(Role.ADMIN)),
 ):
     report = factorial.sync_employees(db, default_company_id=company_id)
+    if report.errors:
+        # No se ha podido sincronizar: revertimos para no dejar cambios parciales.
+        db.rollback()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "; ".join(report.errors))
     db.commit()
     return {
+        "mode": settings.factorial_mode,
         "created": report.created,
         "updated": report.updated,
         "deactivated": report.deactivated,
+        "managers_linked": report.managers_linked,
         "pending_accounting_mapping": report.pending_mapping,
     }

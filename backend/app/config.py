@@ -40,7 +40,14 @@ class Settings(BaseSettings):
     # Factorial
     factorial_mode: str = "stub"  # stub | live
     factorial_api_key: str | None = None
-    factorial_base_url: str = "https://api.factorialhr.com/api/v1"
+    factorial_base_url: str = "https://api.factorialhr.com"
+    # Endpoint de empleados (configurable por versión de la API de Factorial)
+    factorial_employees_path: str = "/api/v2/resources/employees/employees"
+    # Esquema de autenticación: api_key (header x-api-key) | bearer (Authorization)
+    factorial_auth_scheme: str = "api_key"
+    factorial_page_size: int = 100
+    # Mapear automáticamente el "team" de Factorial a un Department del maestro por nombre
+    factorial_map_team_to_department: bool = True
 
     # Autoline
     autoline_detail_level: str = "summary"  # summary | employee

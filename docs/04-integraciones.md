@@ -5,23 +5,35 @@
 **Estrategia:** maestro propio como fuente de verdad contable; Factorial como fuente opcional
 de jerarquía y altas/bajas. El conector es un *adapter* (`services/factorial.py`) con dos modos:
 
-- `FACTORIAL_MODE=stub` (por defecto): devuelve datos simulados, sin red. Útil para desarrollo.
-- `FACTORIAL_MODE=live`: usa `FACTORIAL_API_KEY` contra la API real de Factorial.
+- `FACTORIAL_MODE=stub` (por defecto): devuelve datos simulados, sin red. Útil para desarrollo y tests.
+- `FACTORIAL_MODE=live`: cliente HTTP real contra la API de Factorial (`services/factorial.py`).
 
-**Sincronización (`sync_employees`):**
-1. Lee empleados de Factorial (`/employees`) y su estructura (`/teams`, `manager`).
-2. Hace *upsert* en el maestro por `factorial_id`:
-   - Crea empleados nuevos (sin cuentas contables → quedan marcados como **pendientes de configurar**).
-   - Actualiza nombre, email, departamento, manager, estado activo.
-   - **Nunca** sobrescribe `account`/`cost_center` configurados a mano (son responsabilidad contable).
-3. Devuelve un informe: creados, actualizados, desactivados, pendientes de mapeo contable.
+**Configuración (modo live):**
 
-Endpoints API que Factorial expone y que usamos (modo live):
-| Recurso | Uso |
-|---------|-----|
-| `GET /api/v1/employees` | datos básicos, email, estado |
-| `GET /api/v1/teams` / manager | jerarquía de aprobación |
-| (webhooks) | altas/bajas en tiempo real (roadmap) |
+| Variable | Por defecto | Uso |
+|----------|-------------|-----|
+| `FACTORIAL_API_KEY` | — | credencial (requerida en live) |
+| `FACTORIAL_BASE_URL` | `https://api.factorialhr.com` | base de la API |
+| `FACTORIAL_EMPLOYEES_PATH` | `/api/v2/resources/employees/employees` | endpoint de empleados (parametrizable porque la versión de la API cambia) |
+| `FACTORIAL_AUTH_SCHEME` | `api_key` | `api_key` (header `x-api-key`) o `bearer` (`Authorization: Bearer`) |
+| `FACTORIAL_PAGE_SIZE` | `100` | tamaño de página (paginación automática) |
+| `FACTORIAL_MAP_TEAM_TO_DEPARTMENT` | `true` | mapea el *team* de Factorial a un `Department` del maestro por nombre |
+
+**Sincronización (`sync_employees`) — implementada:**
+1. Descarga los empleados de Factorial **paginando** y los **normaliza** a un esquema interno
+   (tolerante a variaciones de nombres de campo entre versiones de la API).
+2. Hace *upsert* en el maestro por `factorial_id` (respaldo por `employee_code`):
+   - Crea empleados nuevos; los que quedan sin departamento → **pendientes de configurar** (sin cuentas).
+   - Actualiza nombre, email, estado activo y, opcionalmente, el departamento (vía *team*).
+   - **Nunca** sobrescribe `account`/`cost_center`/`employee_code` (responsabilidad contable).
+3. **Resuelve la jerarquía**: segunda pasada que enlaza `manager_id` a partir del manager de Factorial.
+4. **Gestiona bajas**: los empleados con `factorial_id` que ya no aparecen (o terminados) se marcan
+   `active=False` (borrado lógico, nunca físico).
+5. Devuelve un informe: `created`, `updated`, `deactivated`, `managers_linked`, `pending_accounting_mapping`, `errors`.
+   Si hay errores de conexión, la API hace *rollback* y responde `502` sin dejar cambios parciales.
+
+> Roadmap: webhooks de Factorial para altas/bajas en tiempo real (hoy la sync es bajo demanda
+> vía `POST /api/integrations/factorial/sync?company_id=...`, rol ADMIN).
 
 > Si en el futuro se decide que Factorial sea la fuente de verdad total, basta con activar
 > la sincronización completa; el modelo ya contempla `factorial_id` en `Employee`.
