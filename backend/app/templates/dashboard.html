@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Periodos de nómina</h1>
+  <p class="muted">Ciclo: comisiones → aprobación responsables → RRHH → gestoría → nóminas → validación → asiento Autoline</p>
+  <div class="row" style="margin:14px 0">
+    <input id="newCode" placeholder="2026-05" />
+    <select id="newCompany"></select>
+    <button onclick="createPeriod()">Crear periodo</button>
+  </div>
+  <div id="toast" class="toast"></div>
+  <table>
+    <thead><tr><th>Periodo</th><th>Sociedad</th><th>Estado</th><th></th></tr></thead>
+    <tbody id="rows"><tr><td colspan="4" class="muted">Cargando…</td></tr></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Analítica (lo que conecta Power BI)</h2>
+  <div class="grid" id="kpis"><div class="kpi muted">Sin datos validados todavía</div></div>
+  <p class="muted" style="margin-top:10px">Endpoints: <code>/api/analytics/cost?dimension=…</code> · <code>/api/analytics/fixed-vs-variable</code></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let companies = [];
+async function load(){
+  companies = await api('/api/companies');
+  document.getElementById('newCompany').innerHTML =
+    '<option value="">— Grupo —</option>' + companies.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const periods = await api('/api/periods');
+  const cmap = Object.fromEntries(companies.map(c=>[c.id,c.name]));
+  document.getElementById('rows').innerHTML = periods.length ? periods.map(p=>`
+    <tr><td><b>${p.code}</b></td><td>${cmap[p.company_id]||'Grupo'}</td>
+    <td><span class="pill">${p.status}</span></td>
+    <td><a href="/periodos/${p.id}">Abrir →</a></td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">No hay periodos. Crea el primero.</td></tr>';
+  loadKpis();
+}
+async function loadKpis(){
+  try{
+    const fv = await api('/api/analytics/fixed-vs-variable');
+    document.getElementById('kpis').innerHTML = `
+      <div class="kpi"><span class="muted">Salario fijo</span><b>${eur(fv.fijo)}</b></div>
+      <div class="kpi"><span class="muted">Salario variable</span><b>${eur(fv.variable)}</b></div>
+      <div class="kpi"><span class="muted">SS empresa</span><b>${eur(fv.ss_empresa)}</b></div>
+      <div class="kpi"><span class="muted">Coste total empresa</span><b>${eur(fv.coste_total_empresa)}</b></div>
+      <div class="kpi"><span class="muted">Ratio variable</span><b>${(fv.ratio_variable*100).toFixed(1)}%</b></div>`;
+  }catch(e){}
+}
+function toast(msg, ok=false){ const t=document.getElementById('toast'); t.className='toast '+(ok?'ok':'err'); t.style.display='block'; t.textContent=msg; }
+async function createPeriod(){
+  const code = document.getElementById('newCode').value.trim();
+  const company_id = document.getElementById('newCompany').value || null;
+  if(!code){ toast('Indica un código de periodo'); return; }
+  try{ await api('/api/periods',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,company_id:company_id?Number(company_id):null})});
+    toast('Periodo creado', true); load(); }
+  catch(e){ toast(e.message); }
+}
+load();
+</script>
+{% endblock %}

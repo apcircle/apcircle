@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Nómina Hub{% endblock %}</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --ink:#e2e8f0; --muted:#94a3b8; --acc:#38bdf8; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:#020617; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #1e293b; }
+    header .brand { font-weight:700; letter-spacing:.3px; }
+    header .brand span { color:var(--acc); }
+    a { color:var(--acc); text-decoration:none; }
+    .container { max-width:1080px; margin:24px auto; padding:0 24px; }
+    .card { background:var(--card); border:1px solid #334155; border-radius:12px; padding:20px; margin-bottom:18px; }
+    h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:0 0 12px; }
+    .muted { color:var(--muted); font-size:14px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th,td { text-align:left; padding:8px 10px; border-bottom:1px solid #334155; }
+    th { color:var(--muted); font-weight:600; }
+    button, .btn { background:var(--acc); color:#04121f; border:none; padding:9px 14px; border-radius:8px; font-weight:600; cursor:pointer; }
+    button.secondary { background:#334155; color:var(--ink); }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    input, select { background:#0b1220; border:1px solid #334155; color:var(--ink); padding:9px 10px; border-radius:8px; }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#334155; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .steps { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+    .steps .s { padding:5px 10px; border-radius:8px; background:#0b1220; font-size:12px; color:var(--muted); border:1px solid #1e293b; }
+    .steps .s.done { background:#064e3b; color:#bbf7d0; border-color:#065f46; }
+    .steps .s.current { background:#0c4a6e; color:#bae6fd; border-color:#0369a1; }
+    .toast { padding:10px 14px; border-radius:8px; margin:10px 0; font-size:14px; display:none; }
+    .toast.ok { background:#052e1a; color:#bbf7d0; border:1px solid #14532d; }
+    .toast.err { background:#3f1212; color:#fecaca; border:1px solid #7f1d1d; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+    .kpi { background:#0b1220; border:1px solid #1e293b; border-radius:10px; padding:14px; }
+    .kpi b { font-size:22px; display:block; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Nómina<span>Hub</span></div>
+    <div class="row" id="userbar"><a href="/logout">Salir</a></div>
+  </header>
+  <div class="container">{% block content %}{% endblock %}</div>
+  <script>
+    function token(){ return (document.cookie.match(/access_token=([^;]+)/)||[])[1]; }
+    async function api(path, opts={}){
+      opts.headers = Object.assign({'Authorization':'Bearer '+token()}, opts.headers||{});
+      const r = await fetch(path, opts);
+      if(r.status===401){ location.href='/login'; return; }
+      const ct = r.headers.get('content-type')||'';
+      const data = ct.includes('application/json') ? await r.json() : await r.text();
+      if(!r.ok){ throw new Error((data && data.detail) || ('Error '+r.status)); }
+      return data;
+    }
+    function eur(n){ return (Number(n)||0).toLocaleString('es-ES',{style:'currency',currency:'EUR'}); }
+    async function whoami(){ try{ const me = await api('/api/auth/me'); document.getElementById('userbar').innerHTML =
+      `<span class="muted">${me.full_name} · ${me.role}</span> &nbsp; <a href="/logout">Salir</a>`; }catch(e){} }
+    whoami();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
