@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nomina
+      POSTGRES_PASSWORD: nomina
+      POSTGRES_DB: nominahub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nomina"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://nomina:nomina@db:5432/nominahub
+      SECRET_KEY: cambia-esta-clave-en-produccion
+      GESTORIA_EMAIL: nominas@gestoria-ejemplo.es
+      FACTORIAL_MODE: stub
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

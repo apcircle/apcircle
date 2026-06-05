@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Configuración local
+backend/.env
+.env
+
+# Ficheros generados/subidos en runtime (se regeneran con el seed)
+backend/storage/*.xlsx
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

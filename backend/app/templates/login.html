@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:420px; margin:60px auto;">
+  <h1>Acceso a Nómina<span style="color:var(--acc)">Hub</span></h1>
+  <p class="muted">Plataforma de orquestación de nóminas del grupo</p>
+  {% if error %}<div class="toast err" style="display:block">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    <p><input name="username" type="email" placeholder="email" style="width:100%" required></p>
+    <p><input name="password" type="password" placeholder="contraseña" style="width:100%" required></p>
+    <button type="submit" style="width:100%">Entrar</button>
+  </form>
+  <p class="muted" style="margin-top:16px">Usuarios demo: director@grupo.com · jefe.ventas@grupo.com · rrhh@grupo.com · conta@grupo.com (demo1234)</p>
+</div>
+{% endblock %}

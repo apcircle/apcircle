@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block content %}
+<p><a href="/">← Periodos</a></p>
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div><h1 id="code">Periodo</h1><span class="pill" id="status">—</span></div>
+    <div id="merole" class="muted"></div>
+  </div>
+  <div class="steps" id="steps"></div>
+  <div id="toast" class="toast"></div>
+</div>
+
+<div class="card">
+  <h2>1 · Comisiones (sistemas internos)</h2>
+  <p class="muted">Sube el Excel de comisiones. Columnas: codigo_empleado, nombre, departamento, concepto, importe.</p>
+  <div class="row">
+    <input type="file" id="commFile" accept=".xlsx">
+    <button onclick="upload('commFile','commissions')">Subir comisiones</button>
+    <button class="secondary" onclick="act('submit-approval','POST')">Enviar a aprobación</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2 · Aprobaciones</h2>
+  <div class="row">
+    <button onclick="approve('MANAGER','APPROVED')">Aprobar (Responsable)</button>
+    <button class="secondary" onclick="approve('MANAGER','REJECTED')">Rechazar</button>
+    <button onclick="approve('HR','APPROVED')">Validar RRHH</button>
+    <button class="secondary" onclick="approve('HR','REJECTED')">Rechazar RRHH</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>3 · Gestoría</h2>
+  <div class="row">
+    <button onclick="act('send-to-gestoria','POST')">📧 Enviar a gestoría</button>
+    <span class="muted">Luego sube el Excel de nóminas devuelto:</span>
+    <input type="file" id="payFile" accept=".xlsx">
+    <button onclick="upload('payFile','payroll')">Subir nóminas</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>4 · Validación contra maestro</h2>
+  <button onclick="validate()">Validar nóminas</button>
+  <div id="valreport"></div>
+</div>
+
+<div class="card">
+  <h2>5 · Asiento contable Autoline</h2>
+  <div class="row">
+    <button onclick="genJournal()">Generar asiento</button>
+    <a id="dl" class="btn" style="display:none" href="#">⬇ Descargar .xlsx</a>
+    <button class="secondary" onclick="act('close','POST')">Cerrar periodo</button>
+  </div>
+  <div id="journal"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PID = {{ period_id }};
+const ORDER = ["DRAFT","COMMISSIONS_IMPORTED","PENDING_MANAGER_APPROVAL","MANAGER_APPROVED","HR_APPROVED","SENT_TO_GESTORIA","PAYROLL_RECEIVED","PAYROLL_VALIDATED","JOURNAL_GENERATED","CLOSED"];
+function toast(msg, ok=false){ const t=document.getElementById('toast'); t.className='toast '+(ok?'ok':'err'); t.style.display='block'; t.textContent=msg; }
+
+async function load(){
+  const p = await api('/api/periods/'+PID);
+  document.getElementById('code').textContent = 'Periodo '+p.code;
+  document.getElementById('status').textContent = p.status;
+  const cur = ORDER.indexOf(p.status);
+  document.getElementById('steps').innerHTML = ORDER.map((s,i)=>
+    `<div class="s ${i<cur?'done':''} ${i===cur?'current':''}">${i+1}. ${s}</div>`).join('');
+  loadJournal();
+}
+async function upload(inputId, kind){
+  const f = document.getElementById(inputId).files[0];
+  if(!f){ toast('Selecciona un fichero'); return; }
+  const fd = new FormData(); fd.append('file', f);
+  try{ const r = await api(`/api/periods/${PID}/${kind}`,{method:'POST',body:fd});
+    let msg = `Importadas ${r.row_count} filas`; if(r.unmatched) msg += ` · ${r.unmatched} sin empleado`;
+    toast(msg, true); load();
+  }catch(e){ toast(e.message); }
+}
+async function act(action, method){
+  try{ await api(`/api/periods/${PID}/${action}`,{method}); toast('OK: '+action, true); load(); }
+  catch(e){ toast(e.message); }
+}
+async function approve(level, decision){
+  try{ await api(`/api/periods/${PID}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({level, decision})}); toast(`${level} ${decision}`, true); load(); }
+  catch(e){ toast(e.message); }
+}
+async function validate(){
+  try{ const r = await api(`/api/periods/${PID}/validate`,{method:'POST'});
+    let html = `<div class="toast ${r.ok?'ok':'err'}" style="display:block">${r.ok?'✔ Validación correcta':'✖ Hay incidencias'} · ${r.total_lines} líneas</div>`;
+    if(r.unmatched_employees.length) html += `<p><b>Empleados no encontrados:</b> ${r.unmatched_employees.join(', ')}</p>`;
+    if(r.missing_mappings.length) html += `<p><b>Sin cuenta configurada:</b> ${r.missing_mappings.join(', ')}</p>`;
+    if(r.issues.length) html += `<p><b>Otras:</b> ${r.issues.join('; ')}</p>`;
+    document.getElementById('valreport').innerHTML = html; load();
+  }catch(e){ toast(e.message); }
+}
+async function genJournal(){
+  try{ await api(`/api/periods/${PID}/journal`,{method:'POST'}); toast('Asiento generado', true); load(); }
+  catch(e){ toast(e.message); }
+}
+async function loadJournal(){
+  try{
+    const j = await api(`/api/periods/${PID}/journal`);
+    const dl = document.getElementById('dl'); dl.style.display='inline-block'; dl.href=`/api/periods/${PID}/journal/export`;
+    let rows = j.lines.map(l=>`<tr><td>${l.account}</td><td>${l.cost_center_code||''}</td><td>${l.concept}</td>
+      <td style="text-align:right">${l.debit?eur(l.debit):''}</td><td style="text-align:right">${l.credit?eur(l.credit):''}</td></tr>`).join('');
+    document.getElementById('journal').innerHTML = `
+      <p class="muted">Cuadre: ${j.balanced?'✔ cuadrado':'✖ descuadrado'} · Debe ${eur(j.total_debit)} · Haber ${eur(j.total_credit)}</p>
+      <table><thead><tr><th>Cuenta</th><th>C.Coste</th><th>Concepto</th><th style="text-align:right">Debe</th><th style="text-align:right">Haber</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }catch(e){ document.getElementById('dl').style.display='none'; document.getElementById('journal').innerHTML=''; }
+}
+load();
+</script>
+{% endblock %}
